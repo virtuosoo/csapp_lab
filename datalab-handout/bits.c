@@ -143,18 +143,20 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  int var1 = (~x) & y;  //var1的某位为1，当且仅当对应x的位为0，y的位为1
+  int var2 = x & (~y);
+  return ~((~var1) & (~var2)); //相当于一次或运算
 }
 /* 
  * tmin - return minimum two's complement integer 
  *   Legal ops: ! ~ & ^ | + << >>
  *   Max ops: 4
+ 
  *   Rating: 1
  */
 int tmin(void) {
-
-  return 2;
-
+  int res = 0x80 << 24;
+  return res;
 }
 //2
 /*
@@ -165,7 +167,9 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return 2;
+  int all1 = (~1) ^ (1); //其实就是-1
+  int var1 = x ^ all1;  //这个解法的原理是：在补码范围内， x + 1 == x ^ (-1)只有两个解
+  return !((x + 1) ^ var1) & !!(x ^ all1); //即Tmax和-1，按这个条件，排除-1即可。注意 x == y可以写成!(x ^ y)
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -176,7 +180,8 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  int allA = (((((0xAA << 8) + 0xAA) << 8) + 0xAA) << 8) + 0xAA; //0xAAAAAAAA
+  return !((x & allA) ^ allA);
 }
 /* 
  * negate - return -x 
@@ -186,7 +191,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  return (~x) + 1; //补码的性质
 }
 //3
 /* 
@@ -199,7 +204,11 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+  int ret = 1, lowx = x & 0xF;;
+  ret = ret & !((x >> 4) ^ 0x3); //x右移4位后，必须等于0x3
+  ret = ret & !!((lowx & 0xC) ^ 0xC); //x的后4位，不能形如11xx，这样排除了4个
+  ret = ret & !!((lowx & 0xA) ^ 0xA); //x的后4位，也不能形如101x，排除2个
+  return ret;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -209,7 +218,9 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  int neg1 = ~1 + 1; //-1
+  int c = !x + neg1; //当x=0时，c = 0；当x != 0时， c = 0xffffffff，即-1
+  return (z & (~c)) + (y & c);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -219,7 +230,11 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+  int negy = (~y) + 1, Tmin = 1 << 31;
+  int isxNeg = !!(x & Tmin), isyPos = !(y & Tmin);
+  int sum = x + negy;   
+  return (isxNeg & isyPos) | (!(x ^ y)) | //x为负，但y>=0，或者x == y
+  (!!(sum & Tmin) & !(!isxNeg & !isyPos)); //或者x - y < 0，但要排除x为正，y为负的情况，此时可能溢出，导致判断错误
 }
 //4
 /* 
@@ -230,8 +245,13 @@ int isLessOrEqual(int x, int y) {
  *   Max ops: 12
  *   Rating: 4 
  */
+
+// 注意到0x00..0 + 0x01 = true; oxff..f + 0x01 = false
+// 所以当x为0时，需要构造出全0，当x不为0时，需要构造出全1
+// 注意到((~x) + 1) = -x,则x不为0时，(x | ((~x) + 1))一定是负的
+// 此时将其算术左移31位，得到了全1
 int logicalNeg(int x) {
-  return 2;
+  return ((x | ((~x) + 1)) >> 31) + 0x01;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -245,8 +265,28 @@ int logicalNeg(int x) {
  *  Max ops: 90
  *  Rating: 4
  */
+
+// 对于一个正数，想找到多少位能表示，只需找到它最高位的1所在的位置，然后再+1即可，
+// 因为前面需要一个0，表示正负。负数同理，只需找到最高位的0，
+// 为了方便，当x为负数时，将x按位取反。
 int howManyBits(int x) {
-  return 0;
+  int b16, b8, b4, b2, b1, b0;
+  int sign = x >> 31;
+  x = (sign & (~x)) | ((~sign) & x); //如果x为正数，则不变，否则x按位取反
+
+  b16 = !!(x >> 16) << 4; //如果x的高16位有1，则b16值为16，否则值为0，下面的同理
+  x = x >> b16;
+  b8 = !!(x >> 8) << 3;
+  x = x >> b8;
+  b4 = !!(x >> 4) << 2;
+  x = x >> b4;
+  b2 = !!(x >> 2) << 1;
+  x = x >> b2;
+  b1 = !!(x >> 1);
+  x = x >> b1;
+  b0 = x;
+
+  return b16 + b8 + b4 + b2 + b1 + b0 + 1;
 }
 //float
 /* 
