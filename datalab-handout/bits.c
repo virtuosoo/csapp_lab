@@ -301,7 +301,27 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  unsigned s = uf >> 31;
+  unsigned exp = (uf >> 23) & 0xff;
+  unsigned frac = (uf << 9) >> 9;
+  if (exp == 0xff) { //inf or NaN
+    return uf;
+  }
+
+  if (exp == 0) { //denorm 特殊处理
+    if (frac == 0) {
+      return s << 31;
+    }
+    if (((frac >> 22) & 1) == 0) { //直接将frac部分*2即可
+      return (s << 31) + (exp << 23) + (frac << 1);
+    } else { //需要从denorm的形式过度到norm形式
+      unsigned newFrac = frac << 1;
+      newFrac = newFrac << 9 >> 9; //只保留23位
+      return (s << 31) + (0x01 << 23) + (newFrac);
+    }
+  }
+
+  return (s << 31) + ((exp + 1) << 23) + frac; //普通情况，将指数+1即可
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -316,7 +336,35 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  int Tmin = 1 << 31;
+  int s = uf >> 31;
+  int exp = (uf >> 23) & 0xff;
+  int frac = (uf << 9) >> 9;
+
+  if (exp == 0xff) { //inf or NaN
+    return Tmin;
+  }
+
+  if (exp < 127) { //太小，就是0
+    //printf("return 0 because too small\n");
+    return 0;
+  }
+
+  int E = exp - 127;
+  if (E > 31) {
+    return Tmin;
+  }
+
+  int sign = (s == 1) ? -1 : 1;
+  int res = frac | (1 << 23); //把隐含的1填进去
+  //printf("res %x\n", res);
+  if (E < 24) {
+    res = res >> (23 - E);
+  } else {
+    res = res << (E - 23);
+  }
+  //printf("normal return\n");
+  return res * sign;
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
