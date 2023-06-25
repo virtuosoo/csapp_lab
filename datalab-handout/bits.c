@@ -380,5 +380,15 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  unsigned INF = 0xff << 23;
+  if (x < -149) { //too small
+    return 0;
+  }
+  if (x > 127) {
+    return INF;
+  }
+  if (x <= -127 && x >= -149) { //denorm，测试用例里面好像没有这种情况？
+    return 1 << (x + 149); //当x位-127时，左移22位，当x为-149时，左移0位。
+  }
+  return (x + 127) << 23;
 }
