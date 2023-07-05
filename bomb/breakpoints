@@ -1,0 +1,3 @@
+break explode_bomb
+break read_six_numbers
+break *0x0000000000400f1c

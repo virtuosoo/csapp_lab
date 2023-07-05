@@ -1,0 +1,6 @@
+break *0x400f98
+break *0x400f6a
+break *0x400f75
+break explode_bomb
+break *0x400f71
+break *0x400fad

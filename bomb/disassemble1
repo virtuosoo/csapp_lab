@@ -353,7 +353,7 @@ Disassembly of section .text:
   400ef7:	48 83 c4 08          	add    $0x8,%rsp
   400efb:	c3                   	retq   
 
-0000000000400efc <phase_2>: #输入的字符串地址在寄存器rdi里面
+0000000000400efc <phase_2>:
   400efc:	55                   	push   %rbp
   400efd:	53                   	push   %rbx
   400efe:	48 83 ec 28          	sub    $0x28,%rsp
