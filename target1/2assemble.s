@@ -1,0 +1,3 @@
+movq $0x59b997fa, %rdi
+pushq $0x4017ec
+ret # rsp 0x5561dc78 0x5561dca0
