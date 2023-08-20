@@ -5,11 +5,12 @@
 #include <stdlib.h>
 
 const char *optString = "v::s:E:b:t:";
-const int MAX_TRACE_SIZE = 256;
+const int MAX_TRACE_SIZE = 128;
 bool printDetail = false;
 FILE *traceFile;
 int s, E, b;
 int hits = 0, misses = 0, evictions = 0;
+long long setIdxMask, tagMask; 
 
 typedef struct Line {
     int tag;         // 标记位
@@ -33,9 +34,13 @@ typedef struct cacheSet {
 } cacheSet;
 
 void initCacheSet(cacheSet *c, int idx);
+bool isTagInSet(cacheSet *s, long long tag);
 
 void read_params(int argc, char *argv[]);
 void process();
+
+//返回掩码， 从低位起的第s位到第e位都是1
+long long getMask(int s, int e);
 
 int main(int argc, char *argv[])
 {
@@ -81,6 +86,8 @@ void read_params(int argc, char *argv[])
                 break;
         }
     }
+    setIdxMask = getMask(b, b + s - 1);
+    tagMask = getMask(b + s, 63);
 }
 
 void process() 
@@ -90,9 +97,15 @@ void process()
     for (int i = 0; i < setSize; ++i) {
         initCacheSet(&sets[i], i);
     }
-    char traceRecoed[MAX_TRACE_SIZE];
-    while (fscanf(traceFile, "%s", traceRecoed) != EOF) {
-        printf("%s\n", traceRecoed);
+    char traceType[MAX_TRACE_SIZE];
+    int addr, size;
+    while (1) {
+        if (fscanf(traceFile, "%s", traceType) == EOF) {
+            break;
+        }
+        fscanf(traceFile, "%x,%x", &addr, &size);
+        long long idx = (addr & setIdxMask);
+        cacheSet *set = &sets[idx];
     }
 }
 
@@ -122,4 +135,45 @@ void initCacheSet(cacheSet *c, int idx)
     c->tail->next = NULL;
     c->listSize = 0;
     c->idx = idx;
+}
+
+bool isTagInSet(cacheSet *s, long long tag)
+{
+    LinelistNode *cur = s->head->next;
+    while (cur != s->tail) {
+        if (cur->line->tag == tag) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool insertToSet(cacheSet *s, int tag)
+{
+    LinelistNode *a = malloc(sizeof(LinelistNode));
+    a->line = malloc(sizeof(Line_t));
+    a->line->tag = tag;
+    addToList(a, s->head->next);
+    s->listSize += 1;
+}
+
+bool isSetFull(cacheSet *s)
+{
+    return s->listSize >= E;
+}
+
+void evictFromSet(cacheSet *s)
+{
+    removeFromList(s->tail->prev);
+    s->listSize -= 1;
+}
+
+
+long long getMask(int s, int e)
+{
+    long long mask = 0;
+    for (int i = s; i <= e; ++i) {
+        mask |= (1l << i);
+    }
+    return mask;
 }
