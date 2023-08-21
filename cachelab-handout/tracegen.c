@@ -46,6 +46,27 @@ int validate(int fn,int M, int N, int A[N][M], int B[M][N]) {
     return 1;
 }
 
+void findConflict(int M, int N, int A[N][M], int B[M][N])
+{
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            unsigned long long pa = (unsigned long long) &A[i][j], pb = (unsigned long long) &B[i][j];
+            unsigned long long Aidx = (pa >> 5U) % 32U, Bidx = (pb >> 5U) % 32U;
+            printf("i(%d), j(%d), Aidx(%lld), Bidx(%lld)\n",i, j, Aidx, Bidx);
+        }
+    }
+
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            unsigned long long pa = (unsigned long long) &A[i][j], pb = (unsigned long long) &B[j][i];
+            unsigned long long Aidx = (pa >> 5U) % 32U, Bidx = (pb >> 5U) % 32U;
+            if (Aidx == Bidx) {
+                printf("conflict: i(%d), j(%d), Aidx(%lld), Bidx(%lld)\n",i, j, Aidx, Bidx);
+            }
+        }
+    }
+}
+
 int main(int argc, char* argv[]){
     int i;
 
@@ -76,15 +97,7 @@ int main(int argc, char* argv[]){
     /* Fill A with data */
     initMatrix(M,N, A, B); 
         //分析地址冲突情况
-    for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < M; ++j) {
-                unsigned long long pa = (unsigned long long) &A[i][j], pb = (unsigned long long) &B[j][i];
-                unsigned long long Aidx = (pa >> 5U) % 32U, Bidx = (pb >> 5U) % 32U;
-                if (Aidx == Bidx) {
-                    printf("conflict: pa(%llx), pb(%llx), Aidx(%lld), Bidx(%lld), A(%d, %d), B(%d, %d)\n",pa, pb, Aidx, Bidx, i, j, j, i);
-                }
-        }
-    }
+    findConflict(M, N, A, B);
     /* Record marker addresses */
     FILE* marker_fp = fopen(".marker","w");
     assert(marker_fp);
