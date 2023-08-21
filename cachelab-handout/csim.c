@@ -34,7 +34,11 @@ typedef struct cacheSet {
 } cacheSet;
 
 void initCacheSet(cacheSet *c, int idx);
-bool isTagInSet(cacheSet *s, long long tag);
+LinelistNode* isTagInSet(cacheSet *s, long long tag);
+bool insertToSet(cacheSet *s, int tag);
+void evictFromSet(cacheSet *s);
+bool isSetFull(cacheSet *s);
+void moveToHead(cacheSet *s, LinelistNode *o);
 
 void read_params(int argc, char *argv[]);
 void process();
@@ -88,6 +92,7 @@ void read_params(int argc, char *argv[])
     }
     setIdxMask = getMask(b, b + s - 1);
     tagMask = getMask(b + s, 63);
+    printf("parse params succeed\n");
 }
 
 void process() 
@@ -97,16 +102,45 @@ void process()
     for (int i = 0; i < setSize; ++i) {
         initCacheSet(&sets[i], i);
     }
+    printf("init cache set succeed\n");
     char traceType[MAX_TRACE_SIZE];
-    int addr, size;
+    unsigned long long addr, size;
     while (1) {
         if (fscanf(traceFile, "%s", traceType) == EOF) {
             break;
         }
-        fscanf(traceFile, "%x,%x", &addr, &size);
-        long long idx = (addr & setIdxMask);
+        if (fscanf(traceFile, "%llx,%llx", &addr, &size) == EOF) {
+            break;
+        }
+        if (traceType[0] == 'I') {
+            continue;
+        }
+
+        long long idx = (addr & setIdxMask) >> b;
+        long long tag = (addr & tagMask) >> (b + s);
+
+        if (printDetail) {
+            printf("addr: %llx, tag: %llx, idx: %lld\n", addr, tag, idx);
+        }
+
         cacheSet *set = &sets[idx];
+        LinelistNode *o = NULL;
+        if ((o = isTagInSet(set, tag)) != NULL) {
+            hits += 1;
+            moveToHead(set, o);
+        } else {
+            misses += 1;
+            if (isSetFull(set)) {
+                evictions += 1;
+                evictFromSet(set);
+            }
+            insertToSet(set, tag);
+        }
+        if (traceType[0] == 'M') {
+            hits += 1;
+        }
     }
+    printSummary(hits, misses, evictions);
 }
 
 void removeFromList(LinelistNode *o)
@@ -137,15 +171,16 @@ void initCacheSet(cacheSet *c, int idx)
     c->idx = idx;
 }
 
-bool isTagInSet(cacheSet *s, long long tag)
+LinelistNode* isTagInSet(cacheSet *s, long long tag)
 {
     LinelistNode *cur = s->head->next;
     while (cur != s->tail) {
         if (cur->line->tag == tag) {
-            return true;
+            return cur;
         }
+        cur = cur->next;
     }
-    return false;
+    return NULL;
 }
 
 bool insertToSet(cacheSet *s, int tag)
@@ -155,6 +190,7 @@ bool insertToSet(cacheSet *s, int tag)
     a->line->tag = tag;
     addToList(a, s->head->next);
     s->listSize += 1;
+    return true;
 }
 
 bool isSetFull(cacheSet *s)
@@ -162,9 +198,17 @@ bool isSetFull(cacheSet *s)
     return s->listSize >= E;
 }
 
+void moveToHead(cacheSet *s, LinelistNode *o)
+{
+    removeFromList(o);
+    addToList(o, s->head->next);
+}
+
 void evictFromSet(cacheSet *s)
 {
-    removeFromList(s->tail->prev);
+    LinelistNode *victim = s->tail->prev;
+    removeFromList(victim);
+    free(victim);
     s->listSize -= 1;
 }
 
