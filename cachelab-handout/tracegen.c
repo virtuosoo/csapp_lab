@@ -67,6 +67,29 @@ void findConflict(int M, int N, int A[N][M], int B[M][N])
     }
 }
 
+
+void initEasy(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j;
+    int t = 0;
+    for (i = 0; i < N; i++){
+        for (j = 0; j < M; j++){
+            A[i][j] = ++t;
+        }
+    }
+}
+
+void showMatrix(int N, int M, int A[N][M])
+{
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            printf("%4d ", A[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
 int main(int argc, char* argv[]){
     int i;
 
@@ -95,9 +118,11 @@ int main(int argc, char* argv[]){
     registerFunctions();
 
     /* Fill A with data */
-    initMatrix(M,N, A, B); 
+    //initMatrix(M,N, A, B); 
+    initEasy(M, N, A, B);
+    showMatrix(N, M, A);
         //分析地址冲突情况
-    findConflict(M, N, A, B);
+    //findConflict(M, N, A, B);
     /* Record marker addresses */
     FILE* marker_fp = fopen(".marker","w");
     assert(marker_fp);
@@ -119,6 +144,7 @@ int main(int argc, char* argv[]){
         MARKER_START = 33;
         (*func_list[selectedFunc].func_ptr)(M, N, A, B);
         MARKER_END = 34;
+        showMatrix(M, N, B);
         if (!validate(selectedFunc,M,N,A,B))
             return selectedFunc+1;
 

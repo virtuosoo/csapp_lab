@@ -11,7 +11,16 @@
 #include "cachelab.h"
 
 int is_transpose(int M, int N, int A[N][M], int B[M][N]);
-
+void showMatrix1(int N, int M, int A[N][M])
+{
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < M; ++j) {
+            printf("%4d ", A[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
 /* 
  * transpose_submit - This is the solution transpose function that you
  *     will be graded on for Part B of the assignment. Do not change
@@ -37,14 +46,13 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
             }
         }
     } else if (M == 64 && N == 64) {
-        int blockSize = 8;
-        int i = 0, j = 0, k1, k2;
-        for (i = 0; i < N; i += blockSize) {
-            for (j = 0; j < M; j += blockSize) {
-                for (k1 = i; k1 < i + blockSize; ++k1) {
-                    for (k2 = j; k2 < j + blockSize; ++k2) {
-                        B[k2][k1] = A[k1][k2];
-                    }
+        for (int i = 0; i < 64; i += 16) { 
+            for (int j = 0; j < 64; j += 16) {
+                for (int ii = i; ii < i + 4; ++ii) {
+                    t0 = A[ii][j]; t1 = A[ii][j + 1]; t2 = A[ii][j + 2]; t3 = A[ii][j + 3];
+                    t4 = A[ii + 4][j + 4]; t5 = A[ii + 4][j + 5]; t6 = A[ii + 4][j + 6]; t7 = A[ii + 4][j + 7];
+
+
                 }
             }
         }
@@ -115,6 +123,12 @@ void transpose_test(int M, int N, int A[N][M], int B[M][N])
     }
 }
 
+
+char transpose_test64_desc[] = "Transpose test 64";
+void transpose_test64(int M, int N, int A[N][M], int B[M][N])
+{
+    
+}
 /*
  * registerFunctions - This function registers your transpose
  *     functions with the driver.  At runtime, the driver will
@@ -130,6 +144,7 @@ void registerFunctions()
     /* Register any additional transpose functions */
     registerTransFunction(trans, trans_desc); 
     registerTransFunction(transpose_test, transpose_test_desc);
+    registerTransFunction(transpose_test64, transpose_test64_desc);
 
 }
 
