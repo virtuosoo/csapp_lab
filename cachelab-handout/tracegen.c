@@ -118,11 +118,11 @@ int main(int argc, char* argv[]){
     registerFunctions();
 
     /* Fill A with data */
-    //initMatrix(M,N, A, B); 
-    initEasy(M, N, A, B);
-    showMatrix(N, M, A);
+    initMatrix(M,N, A, B); 
+    //initEasy(M, N, A, B);
+    //showMatrix(N, M, A);
         //分析地址冲突情况
-    //findConflict(M, N, A, B);
+    findConflict(M, N, A, B);
     /* Record marker addresses */
     FILE* marker_fp = fopen(".marker","w");
     assert(marker_fp);
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]){
         MARKER_START = 33;
         (*func_list[selectedFunc].func_ptr)(M, N, A, B);
         MARKER_END = 34;
-        showMatrix(M, N, B);
+        //showMatrix(M, N, B);
         if (!validate(selectedFunc,M,N,A,B))
             return selectedFunc+1;
 

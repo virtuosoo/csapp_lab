@@ -109,13 +109,21 @@ void transpose_submit(int M, int N, int A[N][M], int B[M][N])
             }
         }
     } else {
-        int i, j, tmp;
-        for (i = 0; i < N; i++) {
-            for (j = 0; j < M; j++) {
-                tmp = A[i][j];
-                B[j][i] = tmp;
+        int blockSize = 16, i = 0, j = 0;
+        int ib = 0, jb = 0;
+        for (i = 0; i < N; ) {
+            ib = blockSize < (N - i) ? blockSize : (N - i);
+            for (j = 0; j < M; ) {
+                jb = blockSize < (M - j) ? blockSize : (M - j);
+                for (int i1 = i; i1 < i + ib; ++i1) {
+                    for (int j1 = j; j1 < j + jb; ++j1) {
+                        B[j1][i1] = A[i1][j1];
+                    }
+                }
+                j += jb;
             }
-        }  
+            i += ib;
+        }
     }
   
 }
@@ -145,33 +153,21 @@ void trans(int M, int N, int A[N][M], int B[M][N])
 char transpose_test_desc[] = "Transpose test";
 void transpose_test(int M, int N, int A[N][M], int B[M][N])
 {
-    int t0, t1, t2, t3, t4, t5, t6, t7;
-    int i = 0, j = 0, k1;
-    for (i = 0; i < N; i += 8)
-    {
-        for (j = 0; j < M; j += 8)
-        {
-            for (k1 = i; k1 < i + 8; ++k1)
-            {
-                t0 = A[k1][j];
-                t1 = A[k1][j + 1];
-                t2 = A[k1][j + 2];
-                t3 = A[k1][j + 3];
-                t4 = A[k1][j + 4];
-                t5 = A[k1][j + 5];
-                t6 = A[k1][j + 6];
-                t7 = A[k1][j + 7];
-
-                B[j][k1] = t0;
-                B[j + 1][k1] = t1;
-                B[j + 2][k1] = t2;
-                B[j + 3][k1] = t3;
-                B[j + 4][k1] = t4;
-                B[j + 5][k1] = t5;
-                B[j + 6][k1] = t6;
-                B[j + 7][k1] = t7;
+    //int t0, t1, t2, t3, t4, t5, t6, t7;
+    int blockSize = 16, i = 0, j = 0;
+    int ib = 0, jb = 0;
+    for (i = 0; i < N; ) {
+        ib = blockSize < (N - i) ? blockSize : (N - i);
+        for (j = 0; j < M; ) {
+            jb = blockSize < (M - j) ? blockSize : (M - j);
+            for (int i1 = i; i1 < i + ib; ++i1) {
+                for (int j1 = j; j1 < j + jb; ++j1) {
+                    B[j1][i1] = A[i1][j1];
+                }
             }
+            j += jb;
         }
+        i += ib;
     }
 }
 
