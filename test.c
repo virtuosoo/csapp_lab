@@ -3,8 +3,8 @@
 #include <getopt.h>
 #include <time.h>
 
-static int A[1030][1030];
-static int B[1030][1030];
+static int A[2070][2070];
+static int B[2070][2070];
 
 void simple_trans(int N, int M, int A[N][M], int B[N][M])
 {
@@ -12,7 +12,8 @@ void simple_trans(int N, int M, int A[N][M], int B[N][M])
 
     for (i = 0; i < N; i++) {
         for (j = 0; j < M; j++) {
-            B[j][i] = A[i][j];
+            tmp = A[i][j];
+            B[j][i] = tmp;
         }
     }  
 }
@@ -28,7 +29,7 @@ void init(int N, int M, int A[N][M])
 }
 
 int main(int argc, char *argv[]) {
-    int S = 1025;
+    int S = 2048;
     init(S, S, A);
     clock_t startTime = clock();
     simple_trans(S, S, A, B);

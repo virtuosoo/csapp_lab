@@ -305,6 +305,22 @@ void transpose_64x64_ans(int M, int N, int A[N][M], int B[M][N])
         }
     }
 }
+
+char transpose_8x8_block_desc[] = "transpose_8x8_block";
+void transpose_8x8_block(int M, int N, int A[N][M], int B[M][N])
+{
+    int i = 0, j = 0;
+    for (i = 0; i < 32; i += 8) {
+        for (j = 0; j < 32; j += 8) {
+            for (int i1 = i; i1 < i + 8; ++i1) {
+                for (int j1 = j; j1 < j + 8; ++j1) {
+                    B[j1][i1] = A[i1][j1];
+                }
+            }
+        }
+    }
+}
+
 /*
  * registerFunctions - This function registers your transpose
  *     functions with the driver.  At runtime, the driver will
@@ -322,7 +338,7 @@ void registerFunctions()
     registerTransFunction(transpose_test, transpose_test_desc);
     registerTransFunction(transpose_test64, transpose_test64_desc);
     registerTransFunction(transpose_64x64_ans, transpose_64x64_ans_desc);
-
+    registerTransFunction(transpose_8x8_block, transpose_8x8_block_desc);
 }
 
 /* 
