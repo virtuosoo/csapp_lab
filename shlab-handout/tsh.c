@@ -36,6 +36,9 @@
  */
 
 /* Global variables */
+
+volatile sig_atomic_t fg_pid;
+
 extern char **environ;      /* defined in libc */
 char prompt[] = "tsh> ";    /* command line prompt (DO NOT CHANGE) */
 int verbose = 0;            /* if true, print additional output */
@@ -171,10 +174,31 @@ void eval(char *cmdline)
     bg = parseline(cmdline, argv);
 
     if (!builtin_cmd(argv)) {
-        
-        
-        if (bg) {
+        sigset_t mask_child, prev, mask_all;
+        sigemptyset(&mask_child);
+        sigfillset(&mask_all);
+        sigaddset(&mask_child, SIGCHLD);
 
+        sigprocmask(SIG_BLOCK, &mask_child, &prev); //阻塞SIGCHLD信号
+        pid_t pid;
+
+        if ((pid = fork()) == 0) {
+            sigprocmask(SIG_SETMASK, &prev, NULL);
+            if (execve(argv[0], argv, NULL) == -1) {
+                unix_error(argv[0]);
+            }
+        }
+        sigprocmask(SIG_BLOCK, &mask_all, NULL); //操作全局数据结构之前，阻塞所有信号
+        if (!bg) {
+            addjob(jobs, pid, FG, cmdline);
+            sigprocmask(SIG_SETMASK, &prev, NULL);
+            fg_pid = pid;
+            waitfg(pid);
+        } else {
+            addjob(jobs, pid, FG, cmdline);
+            int jid = pid2jid(pid);
+            sigprocmask(SIG_SETMASK, &prev, NULL);
+            printf("(%d) [%d] %s", jid, pid, cmdline);
         }
     }
     return;
@@ -262,6 +286,9 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+    while (fg_pid == pid) {
+        sleep(1);
+    }
     return;
 }
 
@@ -278,6 +305,29 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+    int old_errno = errno;
+    int status;
+    pid_t pid;
+    sigset_t mask, prev;
+    sigfillset(&mask);
+    sigprocmask(SIG_BLOCK, &mask, &prev);
+    while ((pid = waitpid(-1, &status, WUNTRACED)) > 0) {
+        if (pid == fg_pid) {
+            fg_pid = 0;
+            if (!WIFSTOPPED(status)) {
+                deletejob(jobs, pid);
+            } else {
+                struct job_t* job = getjobpid(jobs, pid);
+                if (job == NULL) {
+                    printf("get job by pid(%d) failed\n", pid);
+                }
+                job->state = ST;
+            }
+        } else {
+            deletejob(jobs, pid); //后台任务不会被stop
+        }
+    }
+    errno = old_errno;
     return;
 }
 
