@@ -35,6 +35,14 @@ team_t team = {
     ""
 };
 
+/*
+    freeblock:   linkedlistpointer
+                   |         \
+    [header, 4][nextptr, 8][prevptr, 8]............[footer, 4]
+*/
+
+typedef  unsigned int uint;
+
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
@@ -44,6 +52,27 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+// 常用宏
+#define WSIZE 4
+#define DSIZE 8
+#define MIN_BLOCKSIZE 32
+#define CHUNKSIZE (1<<12) //每次extend heap时最少申请的大小 4kB
+
+#define PACK(size, alloc) ((size) | (alloc))
+#define GETUINT(p) (*(uint *) (p))
+#define PUTUINT(p) (*(uint *) p = val)
+
+#define GETSIZE(p) (GETUINT(p) & (~0x7))
+#define GETALLOC(p) (GETUINT(p) & (0x1))
+
+#define HDRP(bp) ((char *) (bp) - WSIZE)
+#define FTRP(bp) ((char *) (bp) + GETSIZE(HDRP(bp)) - DSIZE)
+
+#define NEXT_BLKP(bp) ((char *) (bp) + GETSIZE(HDRP(bp)))
+#define PREV_BLKP(bp) ((char *) (bp) + GETSIZE(((char *) (bp) - DSIZE)))
+
+static char *heapListPtr;
+static char **freeListPtr;
 /* 
  * mm_init - initialize the malloc package.
  */
