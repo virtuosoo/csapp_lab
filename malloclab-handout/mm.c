@@ -89,7 +89,7 @@ static void *coalesce(char *bp);
 static void insertToFreeList(char *bp);
 static void mem_check();
 static void removeFromFreeList(char *bp);
-static char *nextFreeBlockPtr(char *bp);
+static char *nextFreeBlock(char *bp);
 
 /* 
  * mm_init - initialize the malloc package.
