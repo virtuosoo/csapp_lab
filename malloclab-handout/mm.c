@@ -85,11 +85,14 @@ static char *heapListPtr;
 static char **freeListArrayPtr;
 
 static void *extend_heap(size_t size);
-static void *coalesce(char *bp);
+static char *coalesce(char *bp);
 static void insertToFreeList(char *bp);
 static void mem_check();
 static void removeFromFreeList(char *bp);
 static char *nextFreeBlock(char *bp);
+static char *prevFreeBlock(char *bp);
+static void setNextFreeBlockPtr(char *bp, char *nextBp);
+static void setPrevFreeBlockPtr(char *bp, char *prevBp);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -132,7 +135,7 @@ static void *extend_heap(size_t size)
     return (void *) bp;
 }
 
-static void *coalesce(char *bp)
+static char *coalesce(char *bp)
 {
     uint nextAlloc = GETALLOC(HDRP(NEXT_BLKP(bp)));
     uint prevAlloc = GETALLOC(HDRP(PREV_BLKP(bp)));
@@ -140,27 +143,86 @@ static void *coalesce(char *bp)
 
     if (prevAlloc && nextAlloc) {
         return bp;
+
     } else if (prevAlloc && !nextAlloc) {
         char *nextBp = NEXT_BLKP(bp);
         size += GETSIZE(HDRP(nextBp));
         removeFromFreeList(nextBp);
+        PUTUINT(HDRP(bp), PACK(size, 0));
+        PUTUINT(FTRP(bp), PACK(size, 0));
+
+    } else if (!prevAlloc && nextAlloc) {
+        char *prevBp = PREV_BLKP(bp);
+        size += GETSIZE(HDRP(prevBp));
+        removeFromFreeList(prevBp);
+        PUTUINT(HDRP(prevBp), PACK(size, 0));
+        PUTUINT(FTRP(prevBp), PACK(size, 0));
+        bp = prevBp;
+
+    } else {
+        char *prevBp = PREV_BLKP(bp), *nextBp = NEXT_BLKP(bp);
+        size += GETSIZE(HDRP(prevBp)) + GETSIZE(HDRP(nextBp));
+        removeFromFreeList(prevBp);
+        removeFromFreeList(nextBp);
+        PUTUINT(HDRP(prevBp), PACK(size, 0));
+        PUTUINT(FTRP(prevBp), PACK(size, 0));
+        bp = prevBp;
     }
-    return NULL;
+
+    return bp;
 }
 
+//get next free block's pointer in free list, 
+//note it is stored in the first 8 bytes of the block
 static char *nextFreeBlock(char *bp)
+{
+    return ((char **) bp)[0];
+}
+
+//get prev free block in free list
+static char *prevFreeBlock(char *bp)
 {
     return ((char **) bp)[1];
 }
 
+static void setNextFreeBlockPtr(char *bp, char *nextBp)
+{
+    ((char **) bp)[0] = nextBp;
+}
+
+static void setPrevFreeBlockPtr(char *bp, char *prevBp)
+{
+    ((char **) bp)[1] = prevBp;
+}
+
 static void removeFromFreeList(char *bp)
 {
+    char *prevBp = prevFreeBlock(bp), *nextBp = nextFreeBlock(bp);
+    setNextFreeBlockPtr(prevBp, nextBp);
 
+    if (nextBp != NULL) {
+        setPrevFreeBlockPtr(nextBp, prevBp);
+    }
 }
+
+static char *getFreeListBySize(uint size)
+{
+    if (size <= 32) {
+        return freeListArrayPtr[0];
+    }
+
+    if (size >= (1<<12) + 1) {
+        return freeListArrayPtr[8];
+    }
+
+    
+}
+
 
 static void insertToFreeList(char *bp)
 {
-
+    uint size = GETSIZE(HDRP(bp));
+    char *freeListHead = getFreeListBySize(size);
 }
 
 /* 
@@ -206,7 +268,7 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-void mem_check()
+void mem_check(char *msg)
 {
     #ifdef DEBUG
 
