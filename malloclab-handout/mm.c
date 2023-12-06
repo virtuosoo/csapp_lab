@@ -207,7 +207,7 @@ static void removeFromFreeList(char *bp)
 
 static char *getFreeListBySize(uint size)
 {
-    if (size <= 32) {
+    if (size <= MIN_BLOCKSIZE) {
         return freeListArrayPtr[0];
     }
 
@@ -215,7 +215,11 @@ static char *getFreeListBySize(uint size)
         return freeListArrayPtr[8];
     }
 
-    
+    int highBit = 31 - __builtin_clz(size);
+    int idx;
+    if (size > (1 << highBit)) idx = highBit - 4;
+    else idx = highBit - 5;
+    return freeListArrayPtr[idx];
 }
 
 
