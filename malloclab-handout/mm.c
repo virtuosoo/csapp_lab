@@ -230,17 +230,23 @@ static int getFreeListIdxBySize(uint size)
     return idx;
 }
 
-
+//insert and maintain orderliness
 static void insertToFreeList(char *bp)
 {
     uint size = GETSIZE(HDRP(bp));
-    int FreeListIdx = getFreeListIdxBySize(size);
+    int idx = getFreeListIdxBySize(size);
 
-    setNextFreeBlockPtr(bp, freeListArrayPtr[FreeListIdx]);
-    setPrevFreeBlockPtr(bp, (char *) &freeListArrayPtr[FreeListIdx]);
-    if (freeListArrayPtr[FreeListIdx] != NULL)
-        setPrevFreeBlockPtr(freeListArrayPtr[FreeListIdx], bp);
-    freeListArrayPtr[FreeListIdx] = bp;
+    char *prev = (char *) &freeListArrayPtr[idx], *cur = freeListArrayPtr[idx];
+    while (cur != NULL && GETSIZE(HDRP(cur)) < size) {
+        prev = cur;
+        cur = nextFreeBlock(cur);
+    }
+
+    setNextFreeBlockPtr(bp, cur);
+    setPrevFreeBlockPtr(bp, prev);
+    if (cur != NULL)
+        setPrevFreeBlockPtr(cur, bp);
+    setNextFreeBlockPtr(prev, bp);
 }
 
 static char *findFit(uint size)
