@@ -396,6 +396,32 @@ void mem_check(char *msg)
         prevFree = (GETALLOC(HDRP(bp)) == 0);
     }
 
+    //check if there are free blocks not in the free list
+    char *blocksInList[10005];
+    int idx = 0;
+    for (int i = 0; i < FREELISTNUM; ++i) {
+        for (char *bp = freeListArrayPtr[i]; bp != NULL; bp = nextFreeBlock(bp)) {
+            blocksInList[idx++] = bp;
+        } 
+    }
+
+    for (char *bp = heapListPtr; GETSIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        uint inList = 0;
+        if (!GETALLOC(HDRP(bp))) {
+            for (int i = 0; i < idx; ++i) {
+                if (blocksInList[i] == bp) {
+                    inList = 1;
+                    break;
+                }
+            }
+
+            if (!inList) {
+                printf("free block %p not in the free list\n", bp);
+                exit(-2);
+            }
+        }
+    }
+
     return;
 }
 
