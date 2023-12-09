@@ -82,7 +82,7 @@ typedef unsigned long long uint64;
 #define NEXT_BLKP(bp) ((char *) (bp) + GETSIZE(HDRP(bp)))
 #define PREV_BLKP(bp) ((char *) (bp) - GETSIZE(((char *) (bp) - DSIZE)))
 
-#define DEBUG
+#define DEBUG 0
 
 static char *heapListPtr;
 static char **freeListArrayPtr;
@@ -120,7 +120,6 @@ int mm_init(void)
     if ((bp = extend_heap(CHUNKSIZE)) == NULL) {
         return -1;
     }
-    insertToFreeList(bp);
     return 0;
 }
 
@@ -136,10 +135,15 @@ static void *extend_heap(size_t size)
     PUTUINT(FTRP(bp), asize);
     PUTUINT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
 
+    #if DEBUG > 0
+    printf("extend heap by %d bytes, ptr(%p)\n", size, bp);
+    #endif
+
     bp = coalesce(bp);
     return (void *) bp;
 }
 
+//merge prev and next free block, and insert the hole block to freelist
 static char *coalesce(char *bp)
 {
     uint nextAlloc = GETALLOC(HDRP(NEXT_BLKP(bp)));
@@ -147,7 +151,6 @@ static char *coalesce(char *bp)
     uint size = GETSIZE(HDRP(bp));
 
     if (prevAlloc && nextAlloc) {
-        return bp;
 
     } else if (prevAlloc && !nextAlloc) {
         char *nextBp = NEXT_BLKP(bp);
@@ -173,7 +176,7 @@ static char *coalesce(char *bp)
         PUTUINT(FTRP(prevBp), PACK(size, 0));
         bp = prevBp;
     }
-
+    insertToFreeList(bp);
     return bp;
 }
 
@@ -244,8 +247,14 @@ static char *findFit(uint size)
 {
     uint idx = getFreeListIdxBySize(size);
     for (int i = idx; i < FREELISTNUM; ++i) {
+        #if DEBUG > 1
+        printf("\nstart to search in free list %d\n", i);
+        #endif
         for (char *bp = freeListArrayPtr[i]; bp != NULL; bp = nextFreeBlock(bp)) {
-            if (GETSIZE(bp) >= size) {
+            #if DEBUG > 1
+            printf("ptr(%p) ", bp);
+            #endif
+            if (GETSIZE(HDRP(bp)) >= size) {
                 return bp;
             }
         }
@@ -292,9 +301,9 @@ void *mm_malloc(size_t size)
     if ((bp = findFit(asize)) != NULL) {
         place(bp, asize);
                 
-        #ifdef DEBUG
+        #if DEBUG > 0
         mem_check("check after malloc");
-        printf("alloced: size(%d), asize(%d), ptr(%p)\n", size, asize, bp);
+        printf("findFit alloced: size(%d), asize(%d), ptr(%p)\n", size, asize, bp);
         #endif
         
         return (void *) bp;
@@ -302,12 +311,11 @@ void *mm_malloc(size_t size)
 
     extendSize = MAX(asize, CHUNKSIZE);
     bp = extend_heap(extendSize);
-    bp = coalesce(bp);
     place(bp, asize);
     
-    #ifdef DEBUG
+    #if DEBUG > 0
     mem_check("check after malloc");
-    printf("alloced: size(%d), asize(%d), ptr(%p)\n", size, asize, bp);
+    printf("extend alloced: size(%d), asize(%d), ptr(%p)\n", size, asize, bp);
     #endif
     
     return (void *) bp;
@@ -322,9 +330,8 @@ void mm_free(void *ptr)
     PUTUINT(HDRP(ptr), PACK(size, 0));
     PUTUINT(FTRP(ptr), PACK(size, 0));
     ptr = coalesce(ptr);
-    insertToFreeList(ptr);
     
-    #ifdef DEBUG
+    #if DEBUG > 0
     mem_check("check after free");
     printf("free block size(%d), ptr(%p)\n", size, ptr);
     #endif
@@ -335,19 +342,35 @@ void mm_free(void *ptr)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
-    
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
-      return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-      copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    char *bp;
+    if (ptr == NULL) {
+        bp = mm_malloc(size);
+        return bp;
+    }
+
+    if (size == 0) {
+        mm_free(ptr);
+        return NULL;
+    }
+
+    uint bsize = GETSIZE(HDRP(ptr)), asize = ALIGN(size + DSIZE);
+    if (bsize >= asize) { //do not need to realloc
+        if (bsize - asize > MIN_BLOCKSIZE) {
+            PUTUINT(HDRP(ptr), PACK(asize, 1));
+            PUTUINT(FTRP(ptr), PACK(asize, 1));
+            char *nbp = NEXT_BLKP(ptr);
+            PUTUINT(HDRP(nbp), PACK(bsize - asize, 0));
+            PUTUINT(FTRP(nbp), PACK(bsize - asize, 0));
+            insertToFreeList(nbp);
+        }
+        return ptr;
+    } else {
+        uint copySize = bsize - DSIZE;
+        char *bp = mm_malloc(asize);
+        memcpy(bp, ptr, copySize);
+        mm_free(ptr);
+        return bp;
+    }
 }
 
 void printHeap()
@@ -361,7 +384,6 @@ void printHeap()
 
 void mem_check(char *msg)
 {
-    #ifdef DEBUG
     // check if there are contiguous free blocks
     char *bp;
     uint prevFree = 0;
@@ -373,8 +395,6 @@ void mem_check(char *msg)
         }
         prevFree = (GETALLOC(HDRP(bp)) == 0);
     }
-
-    #endif
 
     return;
 }
