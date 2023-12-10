@@ -272,7 +272,7 @@ static void place(char *bp, uint size)
 {
     uint bsize = GETSIZE(HDRP(bp));
     removeFromFreeList(bp);
-    if (bsize - size <= MIN_BLOCKSIZE) {
+    if (bsize - size < MIN_BLOCKSIZE) {
         PUTUINT(HDRP(bp), PACK(bsize, 1));
         PUTUINT(FTRP(bp), PACK(bsize, 1));
     } else {
@@ -343,6 +343,85 @@ void mm_free(void *ptr)
     #endif
 }
 
+char *coalesceRealloc(char *bp, size_t asize)
+{
+    uint nextAlloc = GETALLOC(HDRP(NEXT_BLKP(bp)));
+    uint prevAlloc = GETALLOC(HDRP(PREV_BLKP(bp)));
+    uint bsize = GETSIZE(HDRP(bp));
+    if (prevAlloc && nextAlloc) {
+        return NULL;
+
+    } else if (prevAlloc && !nextAlloc) {
+        char *nbp = NEXT_BLKP(bp);
+        uint nbsize = GETSIZE(HDRP(nbp));
+        if (bsize + nbsize >= asize) {
+            removeFromFreeList(nbp);
+            if (bsize + nbsize - asize < MIN_BLOCKSIZE) {
+                PUTUINT(HDRP(bp), PACK(bsize + nbsize, 1));
+                PUTUINT(FTRP(bp), PACK(bsize + nbsize, 1));
+            } else {
+                PUTUINT(HDRP(bp), PACK(asize, 1));
+                PUTUINT(FTRP(bp), PACK(asize, 1));
+                nbp = NEXT_BLKP(bp);
+                PUTUINT(HDRP(nbp), PACK(bsize + nbsize - asize, 0));
+                PUTUINT(FTRP(nbp), PACK(bsize + nbsize - asize, 0));
+                insertToFreeList(nbp);
+            }
+            return bp;
+        } else {
+            return NULL;
+        }
+
+    } else if (!prevAlloc && nextAlloc) {
+        char *pbp = PREV_BLKP(bp);
+        uint pbsize = GETSIZE(HDRP(pbp));
+        if (bsize + pbsize >= asize) {
+            removeFromFreeList(pbp);
+            uint copySize = bsize - DSIZE;
+            memmove(pbp, bp, copySize);
+            if (bsize + pbsize - asize < MIN_BLOCKSIZE) {
+                PUTUINT(HDRP(pbp), PACK(bsize + pbsize, 1));
+                PUTUINT(FTRP(pbp), PACK(bsize + pbsize, 1));
+            } else {
+                PUTUINT(HDRP(pbp), PACK(asize, 1));
+                PUTUINT(FTRP(pbp), PACK(asize, 1));
+                char *nbp = NEXT_BLKP(pbp);
+                PUTUINT(HDRP(nbp), PACK(bsize + pbsize - asize, 0));
+                PUTUINT(FTRP(nbp), PACK(bsize + pbsize - asize, 0));
+                insertToFreeList(nbp);
+            }
+            return pbp;
+        } else {
+            return NULL;
+        }
+    
+    } else {
+        char *nbp = NEXT_BLKP(bp), *pbp = PREV_BLKP(bp);
+        uint nbsize = GETSIZE(HDRP(nbp)), pbsize = GETSIZE(HDRP(pbp));
+        if (bsize + nbsize + pbsize >= asize) {
+            removeFromFreeList(pbp);
+            removeFromFreeList(nbp);
+            uint copySize = bsize - DSIZE;
+            memmove(pbp, bp, copySize);
+            if (bsize + nbsize + pbsize - asize < MIN_BLOCKSIZE) {
+                PUTUINT(HDRP(pbp), PACK(bsize + pbsize + nbsize, 1));
+                PUTUINT(FTRP(pbp), PACK(bsize + pbsize + nbsize, 1));
+            } else {
+                PUTUINT(HDRP(pbp), PACK(asize, 1));
+                PUTUINT(FTRP(pbp), PACK(asize, 1));
+                nbp = NEXT_BLKP(pbp);
+                PUTUINT(HDRP(nbp), PACK(bsize + pbsize + nbsize - asize, 0));
+                PUTUINT(FTRP(nbp), PACK(bsize + pbsize + nbsize - asize, 0));
+                insertToFreeList(nbp);
+            }
+
+            return pbp;
+        } else {
+            return NULL;
+        }
+    }
+}
+
 /*
  * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
  */
@@ -371,11 +450,16 @@ void *mm_realloc(void *ptr, size_t size)
         }
         return ptr;
     } else {
-        uint copySize = bsize - DSIZE;
-        char *bp = mm_malloc(asize);
-        memcpy(bp, ptr, copySize);
-        mm_free(ptr);
-        return bp;
+        char *bp;
+        if ((bp = coalesceRealloc(ptr, asize)) != NULL) {
+            return bp;
+        } else {
+            uint copySize = bsize - DSIZE;
+            bp = mm_malloc(asize);
+            memcpy(bp, ptr, copySize);
+            mm_free(ptr);
+            return bp;
+        }
     }
 }
 
