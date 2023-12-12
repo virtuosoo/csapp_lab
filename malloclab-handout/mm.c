@@ -65,7 +65,7 @@ typedef unsigned long long uint64;
 #define WSIZE 4
 #define DSIZE 8
 #define MIN_BLOCKSIZE 32
-#define CHUNKSIZE (1<<12) //每次extend heap时最少申请的大小 4kB
+#define CHUNKSIZE (1<<6) //每次extend heap时最少申请的大小 4kB
 
 #define FREELISTNUM 9
 
