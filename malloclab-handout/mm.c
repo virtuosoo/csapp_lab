@@ -42,7 +42,7 @@ team_t team = {
 
     free lists:
                                           2049, 4096(4K)   (more than 4K)
-    [1, 32], [33, 64], [65, 128], ...... [2^11 + 1, 2^12], [2^12 + 1, inf]
+    [32], [33, 64], [65, 128], ...... [2^11 + 1, 2^12], [2^12 + 1, inf]
     idx from 0 to 8, we need 9 lists
 */
 
@@ -265,20 +265,22 @@ static char *findFit(uint size)
     return NULL;
 }
 
-static void place(char *bp, uint size)
+static char * place(char *bp, uint size)
 {
     uint bsize = GETSIZE(HDRP(bp));
     removeFromFreeList(bp);
     if (bsize - size < MIN_BLOCKSIZE) {
         PUTUINT(HDRP(bp), PACK(bsize, 1));
         PUTUINT(FTRP(bp), PACK(bsize, 1));
+        return bp;
     } else {
-        PUTUINT(HDRP(bp), PACK(size, 1));
-        PUTUINT(FTRP(bp), PACK(size, 1));
+        PUTUINT(HDRP(bp), PACK(bsize - size, 0));
+        PUTUINT(FTRP(bp), PACK(bsize - size, 0));
         char *nbp = NEXT_BLKP(bp);
-        PUTUINT(HDRP(nbp), PACK(bsize - size, 0));
-        PUTUINT(FTRP(nbp), PACK(bsize - size, 0));
-        insertToFreeList(nbp);
+        PUTUINT(HDRP(nbp), PACK(size, 1));
+        PUTUINT(FTRP(nbp), PACK(size, 1));
+        insertToFreeList(bp);
+        return nbp;
     }
 }
 
@@ -313,7 +315,7 @@ void *mm_malloc(size_t size)
     }
 
     if ((bp = findFit(asize)) != NULL) {
-        place(bp, asize);
+        bp = place(bp, asize);
                 
         #if DEBUG > 0
         mem_check("check after malloc");
@@ -325,7 +327,7 @@ void *mm_malloc(size_t size)
 
     extendSize = getExtendSize(asize);
     bp = extend_heap(extendSize);
-    place(bp, asize);
+    bp = place(bp, asize);
     
     #if DEBUG > 0
     mem_check("check after malloc");
