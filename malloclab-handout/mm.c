@@ -115,7 +115,7 @@ int mm_init(void)
     PUTUINT(heapListPtr + 2 * WSIZE, PACK(DSIZE, 1));
     PUTUINT(heapListPtr + 3 * WSIZE, PACK(0, 1));
 
-    heapTailPtr = heapListPtr + 4;
+    heapTailPtr = heapListPtr + 4 * WSIZE;
     heapListPtr += 2 * WSIZE;
     return 0;
 }
@@ -131,7 +131,7 @@ static void *extend_heap(size_t size)
     PUTUINT(HDRP(bp), asize); //旧的结尾块作为新的头部
     PUTUINT(FTRP(bp), asize);
     PUTUINT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
-
+    heapTailPtr += asize;
     #if DEBUG > 0
     printf("extend heap by %d bytes, ptr(%p)\n", size, bp);
     #endif
