@@ -65,7 +65,7 @@ typedef unsigned long long uint64;
 #define WSIZE 4
 #define DSIZE 8
 #define MIN_BLOCKSIZE 32
-#define CHUNKSIZE (1<<6) //每次extend heap时最少申请的大小 4kB
+#define CHUNKSIZE (1<<12) //每次extend heap时最少申请的大小 4kB
 
 #define FREELISTNUM 9
 
@@ -84,7 +84,7 @@ typedef unsigned long long uint64;
 
 #define DEBUG 0
 
-static char *heapListPtr;
+static char *heapListPtr, *heapTailPtr;
 static char **freeListArrayPtr;
 
 static void *extend_heap(size_t size);
@@ -115,11 +115,8 @@ int mm_init(void)
     PUTUINT(heapListPtr + 2 * WSIZE, PACK(DSIZE, 1));
     PUTUINT(heapListPtr + 3 * WSIZE, PACK(0, 1));
 
+    heapTailPtr = heapListPtr + 4;
     heapListPtr += 2 * WSIZE;
-    char *bp;
-    if ((bp = extend_heap(CHUNKSIZE)) == NULL) {
-        return -1;
-    }
     return 0;
 }
 
@@ -285,6 +282,17 @@ static void place(char *bp, uint size)
     }
 }
 
+uint getExtendSize(uint asize)
+{
+    char *lastBp = PREV_BLKP(heapTailPtr);
+    uint tailPrevAlloc = GETALLOC(HDRP(lastBp));
+    if (tailPrevAlloc) {
+        return asize;
+    } else {
+        return asize - GETSIZE(HDRP(lastBp));
+    }
+}
+
 /* 
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
@@ -315,7 +323,7 @@ void *mm_malloc(size_t size)
         return (void *) bp;
     }
 
-    extendSize = MAX(asize, CHUNKSIZE);
+    extendSize = getExtendSize(asize);
     bp = extend_heap(extendSize);
     place(bp, asize);
     
