@@ -1,6 +1,6 @@
 #include "csapp.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000  //~= 1MB
@@ -18,7 +18,6 @@ static const char *httpPrefix = "http://";
 static const int httpPrefixLen = 7;
 
 static char *defaulWebPort = "80";
-static char *proxyPort = "8082";
 static char *version = "HTTP/1.0";
 
 
@@ -31,13 +30,14 @@ int parseRequestLine(char *requstLine, char *method, char *host, char **uri);
 int connectToHost(char *host);
 int rio_readlineb_limit(rio_t *rp, void *usrbuf, size_t maxlen);
 int forwardRequestHdrs(rio_t *rioClient, rio_t *rioServer);
+int forwardResponse(rio_t *rioClient, rio_t *rioServer);
 
-int main()
+int main(int argc, char **argv)
 {
     int listenfd, *connfd;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
-    listenfd = Open_listenfd(proxyPort);
+    listenfd = Open_listenfd(argv[1]);
 
     while (1) {
         pthread_t tid;
@@ -65,24 +65,23 @@ void* work(void *fd)
     rio_readinitb(&rioClient, clientfd);
     rc = rio_readlineb_limit(&rioClient, buf, MAXLINE); //read requst line
     if (rc < 0) {
-        close(clientfd);
-        return NULL;
+        goto closeClient;
     }
 
     #if DEBUG > 0
-    printf("request line %s");
+    printf("request line %s", buf);
     #endif
 
     char *uri;
     if (parseRequestLine(buf, method, host, &uri) < 0) {
         printf("parse request line failed, %s\n", buf);
-        return NULL;
+        goto closeClient;
     }
 
     int serverfd = connectToHost(host); //fd that communicate with server
     if (serverfd < 0) {
         printf("connect to server failed\n");
-        return NULL;
+        goto closeClient;
     }
 
     rio_readinitb(&rioServer, serverfd);
@@ -90,19 +89,29 @@ void* work(void *fd)
     sprintf(sendBuf, "%s %s %s\r\n", method, uri, version);
     if (rio_writen(serverfd, sendBuf, strlen(sendBuf)) < 0) {
         printf("send requst line failed, error(%s)\n", strerror(errno));
-        return NULL;
+        goto closeBoth;
     }
     sprintf(sendBuf, "Host: %s\r\n", host);
     if (rio_writen(serverfd, sendBuf, strlen(sendBuf)) < 0) {
         printf("send Host header failed, error(%s)\n", strerror(errno));
-        return NULL;
+        goto closeBoth;
     }
 
     if (forwardRequestHdrs(&rioClient, &rioServer) < 0) {
-        printf("send request headers failed, error(%s)\n", strerror(errno));
-        return NULL;
+        printf("forward request headers failed, error(%s)\n", strerror(errno));
+        goto closeBoth;
     }
 
+    if (forwardResponse(&rioClient, &rioServer) < 0) {
+        printf("forward response failed, error(%s)\n", strerror(errno));
+        goto closeBoth;
+    }
+
+closeBoth:
+    close(serverfd);
+closeClient:
+    close(clientfd);
+    return NULL;
 }
 
 //must read a '\n' within length maxlen, otherwise return -1, means error
@@ -137,21 +146,28 @@ int parseRequestLine(char *requstLine, char *method, char *host, char **uri)
     memcpy(method, requstLine, len);
     method[len] = '\0';
 
-    if (strncmp(url, httpPrefix, httpPrefixLen) != 0) { //uri must starts with "http://"
-        return -1;
+    #if DEBUG > 0
+    printf("parse method %s\n", method);
+    #endif
+    if (strncmp(url, httpPrefix, httpPrefixLen) == 0) { //uri starts with "http://"
+        url = url + httpPrefixLen;     //skip throw the prefix
     }
     
-    url = url + httpPrefixLen; 
     c = strchr(url, ' ');   //find the space before version part
     *c = '\0';              //we don not need the version part and this way we don not need to copy the uri part
     *uri = strchr(url, '/');
+    if (*uri == NULL) {
+        *uri = "/";
+        len = c - url;
+    } else {
+        len = *uri - url;       //the host length
+    }
 
-    len = *uri - url;       //the host length
     memcpy(host, url, len);
     host[len] = '\0';
 
     #if DEBUG > 0
-    printf("parse requst line success. method(%s), host(%s), uri(%s)\n", method, host, uri);
+    printf("parse requst line success. method(%s), host(%s), uri(%s)\n", method, host, *uri);
     #endif
 
     return 0;
@@ -205,8 +221,30 @@ int forwardRequestHdrs(rio_t *rioClient, rio_t *rioServer)
         if (wc < 0) {
             return -1;
         }
-
+        #if DEBUG > 0
+        printf("forward request header %s", buf);
+        #endif
         if (strcmp(buf, "\r\n") == 0) break;
     }
     return 1;
+}
+
+int forwardResponse(rio_t *rioClient, rio_t *rioServer)
+{
+    int rc, wc;
+    char buf[MAXLINE];
+    while (1) {
+        if ((rc = rio_readnb(rioServer, buf, MAXLINE)) < 0) {
+            return -1;
+        }
+        if ((wc = rio_writen(rioClient->rio_fd, buf, rc)) < 0) {
+            return -1;
+        }
+        
+        #if DEBUG > 0
+        printf("forward response %s", buf);
+        #endif
+        if (rc == 0) break;
+    }
+    return 0;
 }
