@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
     listenfd = Open_listenfd(argv[1]);
-
+    signal(SIGPIPE,SIG_IGN);  
     while (1) {
         pthread_t tid;
         clientlen = sizeof(clientaddr);
@@ -123,7 +123,7 @@ int rio_readlineb_limit(rio_t *rp, void *usrbuf, size_t maxlen)
         return -1;
     }
 
-    if (((char *)usrbuf)[rc - 1] != '\n') { //line is too long
+    if (rc == maxlen - 1 && ((char *)usrbuf)[rc - 1] != '\n') { //line is too long
         printf("line is too long, %s\n", (char *)usrbuf);
         return -1;
     }
