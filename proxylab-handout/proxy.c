@@ -38,7 +38,7 @@ int main(int argc, char **argv)
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
     listenfd = Open_listenfd(argv[1]);
-    signal(SIGPIPE,SIG_IGN);  
+    Signal(SIGPIPE,SIG_IGN);  
     while (1) {
         pthread_t tid;
         clientlen = sizeof(clientaddr);
