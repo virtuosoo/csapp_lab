@@ -123,8 +123,9 @@ int rio_readlineb_limit(rio_t *rp, void *usrbuf, size_t maxlen)
         return -1;
     }
 
-    if (rc == maxlen - 1 && ((char *)usrbuf)[rc - 1] != '\n') { //line is too long
-        printf("line is too long, %s\n", (char *)usrbuf);
+    if (((char *)usrbuf)[rc - 1] != '\n') { //line is too long or the other side closed the socket
+        printf("read a line failed, maybe it is too long or the other side \
+                has closed the socket %s\n", (char *)usrbuf);
         return -1;
     }
     return rc;
