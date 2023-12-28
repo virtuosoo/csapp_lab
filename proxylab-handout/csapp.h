@@ -2,6 +2,7 @@
  * csapp.h - prototypes and definitions for the CS:APP3e book
  */
 /* $begin csapp.h */
+#pragma once
 #ifndef __CSAPP_H__
 #define __CSAPP_H__
 
