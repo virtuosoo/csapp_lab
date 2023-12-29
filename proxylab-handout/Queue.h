@@ -6,7 +6,7 @@ typedef struct {
 } Queue;
 
 typedef struct {
-    Queue q;
+    Queue base;
     int *buf;
     int n;          //max number of slots
     int front;      //buf[(front+1) % n] is the first item;
@@ -15,3 +15,7 @@ typedef struct {
     sem_t items;
     sem_t mutex;
 } SemBlockingQueue;
+
+void* newSemQueueInit(int n);
+void semQueuePut(void *_q, int fd);
+int semQueueGet(void *_q);

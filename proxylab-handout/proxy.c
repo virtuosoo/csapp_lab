@@ -1,10 +1,13 @@
 #include "csapp.h"
+#include "Queue.h"
 
 #define DEBUG 1
 
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000  //~= 1MB
 #define MAX_OBJECT_SIZE 102400  //100 KB
+#define SEM_QUEUE_SIZE 16
+#define THREAD_NUM 16
 
 #define HOSTNAME_LEN 256
 #define PORT_LEN 8
@@ -25,7 +28,10 @@ char *supplied_hdrs[] = {"User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3)
                         "Connection: close\r\n", 
                         "Proxy-Connection: close\r\n"};
 
-void *work(void *connfd);
+Queue *q;
+
+void *thread(void *arg);
+void *work(int connfd);
 int parseRequestLine(char *requstLine, char *method, char *host, char **uri);
 int connectToHost(char *host);
 int rio_readlineb_limit(rio_t *rp, void *usrbuf, size_t maxlen);
@@ -34,30 +40,41 @@ int forwardResponse(rio_t *rioClient, rio_t *rioServer);
 
 int main(int argc, char **argv)
 {
-    int listenfd, *connfd;
+    q = newSemQueueInit(SEM_QUEUE_SIZE);
+    pthread_t tids[THREAD_NUM];
+    for (int i = 0; i < THREAD_NUM; ++i) {
+        pthread_create(&tids[i], NULL, thread, NULL);
+    }
+    
+    int listenfd, connfd;
     socklen_t clientlen;
     struct sockaddr_storage clientaddr;
     listenfd = Open_listenfd(argv[1]);
     Signal(SIGPIPE,SIG_IGN);  
     while (1) {
-        pthread_t tid;
         clientlen = sizeof(clientaddr);
-        connfd = (int *) Malloc(sizeof(int));
-        *connfd = accept(listenfd, (SA*) &clientaddr, &clientlen);
-        if (*connfd < 0) {
+        connfd = accept(listenfd, (SA*) &clientaddr, &clientlen);
+        if (connfd < 0) {
             printf("accept failed, %s\n", strerror(errno));
         }
-        Pthread_create(&tid, NULL, work, (void *) connfd);
+        q->put(q, connfd);
     }
     
     return 0;
 }
 
-void* work(void *fd)
+void *thread(void *arg)
 {
-    int clientfd = *((int *) fd), rc;  //fd that communicate with client
-    Free(fd);
     pthread_detach(pthread_self());
+    while (1) {
+        int fd = q->get(q);
+        work(fd);
+    }
+}
+
+void* work(int fd)
+{
+    int clientfd = fd, rc;  //fd that communicate with client
     char method[METHOD_LEN], host[HOST_LEN];
     char buf[MAXLINE], sendBuf[MAXLINE];
 
