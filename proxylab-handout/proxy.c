@@ -1,21 +1,9 @@
 #include "csapp.h"
 #include "Queue.h"
+#include "proxy.h"
+#include "cache.h"
 
 #define DEBUG 1
-
-/* Recommended max cache and object sizes */
-#define MAX_CACHE_SIZE 1049000  //~= 1MB
-#define MAX_OBJECT_SIZE 102400  //100 KB
-#define SEM_QUEUE_SIZE 16
-#define THREAD_NUM 16
-
-#define HOSTNAME_LEN 256
-#define PORT_LEN 8
-#define METHOD_LEN 16
-#define HOST_LEN 128
-#define HTTP_VERSION_LEN 16
-
-#define ARRAY_LEN(arr) sizeof(arr) / sizeof((arr)[0])
 
 static const char *httpPrefix = "http://";
 static const int httpPrefixLen = 7;
@@ -29,6 +17,7 @@ char *supplied_hdrs[] = {"User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3)
                         "Proxy-Connection: close\r\n"};
 
 Queue *q;
+CacheList *list;
 
 void *thread(void *arg);
 void *work(int connfd);
@@ -36,11 +25,14 @@ int parseRequestLine(char *requstLine, char *method, char *host, char **uri);
 int connectToHost(char *host);
 int rio_readlineb_limit(rio_t *rp, void *usrbuf, size_t maxlen);
 int forwardRequestHdrs(rio_t *rioClient, rio_t *rioServer);
-int forwardResponse(rio_t *rioClient, rio_t *rioServer);
+int forwardResponse(rio_t *rioClient, rio_t *rioServer, CacheNode *cache);
+int readRequstHdrs(rio_t *rioClient);
 
 int main(int argc, char **argv)
 {
     q = newSemQueueInit(SEM_QUEUE_SIZE);
+    list = (CacheList *) malloc(sizeof(CacheList));
+    initCacheList(list, MAX_CACHE_SIZE);
     pthread_t tids[THREAD_NUM];
     for (int i = 0; i < THREAD_NUM; ++i) {
         pthread_create(&tids[i], NULL, thread, NULL);
@@ -77,6 +69,7 @@ void* work(int fd)
     int clientfd = fd, rc;  //fd that communicate with client
     char method[METHOD_LEN], host[HOST_LEN];
     char buf[MAXLINE], sendBuf[MAXLINE];
+    CacheNode *cache = NULL;
 
     rio_t rioClient, rioServer;
     rio_readinitb(&rioClient, clientfd);
@@ -93,6 +86,19 @@ void* work(int fd)
     if (parseRequestLine(buf, method, host, &uri) < 0) {
         printf("parse request line failed, %s\n", buf);
         goto closeClient;
+    }
+    char url[MAXLINE];
+    sprintf(url, "%s%s", host, uri);
+    cache = findNodeByUrl(list, url);
+    if (cache != NULL) {
+        if (readRequstHdrs(&rioClient) < 0) {
+            goto closeClient;
+        }
+        rio_writen(clientfd, cache->data, cache->nodeSize);
+        goto closeClient;
+    } else {
+        cache = newCacheNode(1);
+        setNodeUrl(cache, url);
     }
 
     int serverfd = connectToHost(host); //fd that communicate with server
@@ -119,15 +125,22 @@ void* work(int fd)
         goto closeBoth;
     }
 
-    if (forwardResponse(&rioClient, &rioServer) < 0) {
+    if (forwardResponse(&rioClient, &rioServer, cache) < 0) {
         printf("forward response failed, error(%s)\n", strerror(errno));
         goto closeBoth;
+    }
+
+    if (cache->valid) {
+        insertNodeToList(list, cache);
     }
 
 closeBoth:
     close(serverfd);
 closeClient:
     close(clientfd);
+    if (cache != NULL && !cache->valid) {
+        deleteCacheNode(cache);
+    }
     return NULL;
 }
 
@@ -247,7 +260,7 @@ int forwardRequestHdrs(rio_t *rioClient, rio_t *rioServer)
     return 1;
 }
 
-int forwardResponse(rio_t *rioClient, rio_t *rioServer)
+int forwardResponse(rio_t *rioClient, rio_t *rioServer, CacheNode *cache)
 {
     int rc, wc;
     char buf[MAXLINE];
@@ -255,6 +268,7 @@ int forwardResponse(rio_t *rioClient, rio_t *rioServer)
         if ((rc = rio_readnb(rioServer, buf, MAXLINE)) < 0) {
             return -1;
         }
+        appendNodeData(cache, buf, rc);
         if ((wc = rio_writen(rioClient->rio_fd, buf, rc)) < 0) {
             return -1;
         }
@@ -265,4 +279,18 @@ int forwardResponse(rio_t *rioClient, rio_t *rioServer)
         if (rc == 0) break;
     }
     return 0;
+}
+
+int readRequstHdrs(rio_t *rioClient)
+{
+    char buf[MAXLINE];
+    while (1) {
+        int rc;
+        if ((rc = rio_readlineb_limit(rioClient, buf, MAXLINE)) < 0) {
+            return -1;
+        }
+
+        if (strcmp(buf, "\r\n") == 0) break;
+    }
+    return 1;
 }
