@@ -90,13 +90,16 @@ void* work(int fd)
     char url[MAXLINE];
     sprintf(url, "%s%s", host, uri);
     cache = findNodeByUrl(list, url);
+    int delCache;
     if (cache != NULL) {
+        delCache = 0;
         if (readRequstHdrs(&rioClient) < 0) {
             goto closeClient;
         }
         rio_writen(clientfd, cache->data, cache->nodeSize);
         goto closeClient;
     } else {
+        delCache = 1;
         cache = newCacheNode(1);
         setNodeUrl(cache, url);
     }
@@ -131,6 +134,7 @@ void* work(int fd)
     }
 
     if (cache->valid) {
+        delCache = 0;
         insertNodeToList(list, cache);
     }
 
@@ -138,7 +142,7 @@ closeBoth:
     close(serverfd);
 closeClient:
     close(clientfd);
-    if (cache != NULL && !cache->valid) {
+    if (cache != NULL && (!cache->valid || delCache)) {
         deleteCacheNode(cache);
     }
     return NULL;
